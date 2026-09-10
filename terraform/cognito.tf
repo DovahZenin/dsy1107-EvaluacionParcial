@@ -19,7 +19,7 @@ resource "aws_cognito_user_pool" "pool" {
 
 # 2. Dominio para la Hosted UI
 resource "aws_cognito_user_pool_domain" "hosted_ui" {
-  domain       = "dsy1107-grupo007"
+  domain       = "dsy1107-grupo007-app"
   user_pool_id = aws_cognito_user_pool.pool.id
 }
 
