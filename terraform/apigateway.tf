@@ -27,31 +27,71 @@ resource "aws_apigatewayv2_authorizer" "cognito" {
 
   jwt_configuration {
     audience = [aws_cognito_user_pool_client.spa.id]
-    issuer = "https://cognito-idp.${data.aws_region.current.region}.amazonaws.com/${aws_cognito_user_pool.pool.id}"
+    issuer   = "https://cognito-idp.${data.aws_region.current.name}.amazonaws.com/${aws_cognito_user_pool.pool.id}"
   }
 }
 
 # 4. Integración HTTP hacia el Backend
 resource "aws_apigatewayv2_integration" "backend" {
-  api_id           = aws_apigatewayv2_api.http_api.id
-  integration_type = "HTTP_PROXY"
-  
-  # API Gateway exige una URL pública enrutable (HTTP o HTTPS).
-  # Para pruebas locales de IaC usa este endpoint temporal. 
-  # En producción con ECS/EC2 se reemplaza por http://<DNS_DEL_ALB>
-  integration_uri  = "https://httpbin.org/anything"
-  
+  api_id                 = aws_apigatewayv2_api.http_api.id
+  integration_type       = "HTTP_PROXY"
+  # Se inicializa con un valor temporal; el script de ECS escribirá la IP real al desplegar
+  integration_uri        = "http://127.0.0.1:8080/dummy" 
   integration_method     = "ANY"
   payload_format_version = "1.0"
+
+  lifecycle { 
+    ignore_changes = [integration_uri] 
+  }
 }
 
-# 5. Ruta genérica con autenticación para /api/solicitudes
-resource "aws_apigatewayv2_route" "solicitudes" {
-  api_id             = aws_apigatewayv2_api.http_api.id
-  route_key          = "ANY /api/solicitudes/{proxy+}"
-  target             = "integrations/${aws_apigatewayv2_integration.backend.id}"
-  authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
-  authorization_type = "JWT"
+# 5. Rutas específicas con sus respectivos scopes
+
+# --- RUTAS SOLICITANTE ---
+resource "aws_apigatewayv2_route" "get_mis_solicitudes" {
+  api_id               = aws_apigatewayv2_api.http_api.id
+  route_key            = "GET /api/solicitudes/mis-solicitudes"
+  target               = "integrations/${aws_apigatewayv2_integration.backend.id}"
+  authorizer_id        = aws_apigatewayv2_authorizer.cognito.id
+  authorization_type   = "JWT"
+  authorization_scopes = ["solicitudes/read"]
+}
+
+resource "aws_apigatewayv2_route" "post_solicitudes" {
+  api_id               = aws_apigatewayv2_api.http_api.id
+  route_key            = "POST /api/solicitudes"
+  target               = "integrations/${aws_apigatewayv2_integration.backend.id}"
+  authorizer_id        = aws_apigatewayv2_authorizer.cognito.id
+  authorization_type   = "JWT"
+  authorization_scopes = ["solicitudes/write"]
+}
+
+resource "aws_apigatewayv2_route" "delete_solicitudes" {
+  api_id               = aws_apigatewayv2_api.http_api.id
+  route_key            = "DELETE /api/solicitudes/{id}"
+  target               = "integrations/${aws_apigatewayv2_integration.backend.id}"
+  authorizer_id        = aws_apigatewayv2_authorizer.cognito.id
+  authorization_type   = "JWT"
+  authorization_scopes = ["solicitudes/write"]
+}
+
+# --- RUTAS APROBADOR ---
+resource "aws_apigatewayv2_route" "get_todas" {
+  api_id               = aws_apigatewayv2_api.http_api.id
+  route_key            = "GET /api/solicitudes/todas"
+  target               = "integrations/${aws_apigatewayv2_integration.backend.id}"
+  authorizer_id        = aws_apigatewayv2_authorizer.cognito.id
+  authorization_type   = "JWT"
+  authorization_scopes = ["solicitudes/approve"]
+}
+
+resource "aws_apigatewayv2_route" "patch_evaluar" {
+  api_id               = aws_apigatewayv2_api.http_api.id
+  route_key            = "PATCH /api/solicitudes/{id}/evaluar"
+  target               = "integrations/${aws_apigatewayv2_integration.backend.id}"
+  authorizer_id        = aws_apigatewayv2_authorizer.cognito.id
+  authorization_type   = "JWT"
+  authorization_scopes = ["solicitudes/approve"]
 }
 
 data "aws_region" "current" {}
