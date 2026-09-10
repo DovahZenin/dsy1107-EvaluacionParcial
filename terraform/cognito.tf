@@ -1,6 +1,6 @@
 # 1. Grupo de Usuarios (User Pool)
 resource "aws_cognito_user_pool" "pool" {
-  name                     = "dsy1107-grupo007"
+  name                     = "dsy1107-Grupo8"
   username_attributes      = ["email"]
   auto_verified_attributes = ["email"]
   
@@ -10,7 +10,7 @@ resource "aws_cognito_user_pool" "pool" {
     minimum_length    = 8
     require_lowercase = true
     require_uppercase = true
-    require_numbers   = true
+    require_numbers   = false
     require_symbols   = false
   }
 
@@ -28,7 +28,7 @@ resource "aws_cognito_user_pool" "pool" {
 
 # 2. Dominio para la Hosted UI
 resource "aws_cognito_user_pool_domain" "hosted_ui" {
-  domain       = "dsy1107-grupo007-app"
+  domain       = "dsy1107-Grupo8-app"
   user_pool_id = aws_cognito_user_pool.pool.id
 }
 
