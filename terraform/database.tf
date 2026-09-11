@@ -24,7 +24,7 @@ resource "aws_db_instance" "postgres" {
   max_allocated_storage  = 20
   db_name                = "solicitudes_db"
   engine                 = "postgres"
-  engine_version         = "15"
+  engine_version         = "15.13"
   instance_class         = "db.t3.micro"
   username               = "postgres"
   password               = "postgres123" # Puedes parametrizarlo si prefieres

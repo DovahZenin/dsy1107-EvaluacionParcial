@@ -24,8 +24,8 @@
  * que este archivo no contemple.
  */
 const SCOPES_POR_GRUPO = {
-  lectores: ['productos/read'],
-  editores: ['productos/read', 'productos/write'],
+  solicitantes: ['solicitudes/read', 'solicitudes/write'],
+  aprobadores: ['solicitudes/read', 'solicitudes/write', 'solicitudes/approve'],
 };
 
 export const handler = async (event) => {
@@ -33,7 +33,7 @@ export const handler = async (event) => {
   // consultar el directorio, viene resuelta en el evento.
   const grupos = event.request.groupConfiguration?.groupsToOverride ?? [];
 
-  // El Set evita que alguien que este en los dos grupos reciba productos/read
+  // El Set evita que alguien que este en los dos grupos reciba solicitudes/read
   // dos veces en el mismo claim.
   const scopes = [...new Set(grupos.flatMap((grupo) => SCOPES_POR_GRUPO[grupo] ?? []))];
 

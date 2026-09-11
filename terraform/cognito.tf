@@ -1,6 +1,6 @@
 # 1. Grupo de Usuarios (User Pool)
 resource "aws_cognito_user_pool" "pool" {
-  name                     = "dsy1107-Grupo8"
+  name                     = "dsy1107-grupo8"
   username_attributes      = ["email"]
   auto_verified_attributes = ["email"]
   
@@ -28,7 +28,7 @@ resource "aws_cognito_user_pool" "pool" {
 
 # 2. Dominio para la Hosted UI
 resource "aws_cognito_user_pool_domain" "hosted_ui" {
-  domain       = "dsy1107-Grupo8-app"
+  domain       = "dsy1107-grupo8-app"
   user_pool_id = aws_cognito_user_pool.pool.id
 }
 
@@ -43,8 +43,15 @@ resource "aws_cognito_user_pool_client" "spa" {
   allowed_oauth_flows                  = ["code"]
   supported_identity_providers          = ["COGNITO"]
   
-  # Scopes requeridos por el laboratorio (Sin los custom scopes)
-  allowed_oauth_scopes = ["openid", "email", "profile", "aws.cognito.signin.user.admin"]
+  allowed_oauth_scopes = [
+    "openid",
+    "email",
+    "profile",
+    "aws.cognito.signin.user.admin",
+    "solicitudes/read",
+    "solicitudes/write",
+    "solicitudes/approve",
+  ]
 
   callback_urls = ["http://localhost:5173/"]
   logout_urls   = ["http://localhost:5173/"]
@@ -58,6 +65,8 @@ resource "aws_cognito_user_pool_client" "spa" {
     access_token = "minutes"
     id_token     = "minutes"
   }
+
+  depends_on = [aws_cognito_resource_server.solicitudes]
 }
 
 # 4. Usuario Demo Inicial
