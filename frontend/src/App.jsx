@@ -1,125 +1,186 @@
-import { useEffect, useState, useRef } from 'react';
-import { CONFIG } from './config';
-import { generateCodeVerifier, generateCodeChallenge } from './pkce';
+import React, { useEffect, useState } from 'react';
+import { login, logout, procesarRetorno, getTokens, decodificarJwt } from './auth.js';
+import * as api from './api.js';
 
 export default function App() {
-  const [tokens, setTokens] = useState(null);
-  const [apiResponse, setApiResponse] = useState(null);
-  const fetchedRef = useRef(false);
+  const [tokens, setTokens] = useState(getTokens());
+  const [error, setError] = useState(null);
+  
+  // Estados para Solicitante
+  const [misSolicitudes, setMisSolicitudes] = useState([]);
+  const [tipo, setTipo] = useState('VACACIONES');
+  const [descripcion, setDescripcion] = useState('');
+
+  // Estados para Aprobador
+  const [todasSolicitudes, setTodasSolicitudes] = useState([]);
+  const [comentarios, setComentarios] = useState({});
 
   useEffect(() => {
-    // Si ya hay tokens en sesión previa, los cargamos
-    const storedAccessToken = sessionStorage.getItem('access_token');
-    if (storedAccessToken) {
-      setTokens({ access_token: storedAccessToken });
-    }
-
-    const handleCallback = async () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const code = urlParams.get('code');
-      const verifier = sessionStorage.getItem('code_verifier');
-
-      if (!code || !verifier || fetchedRef.current) return;
-      fetchedRef.current = true;
-
-      const payload = new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: CONFIG.clientId,
-        code: code,
-        redirect_uri: CONFIG.redirectUri,
-        code_verifier: verifier
-      });
-
-      try {
-        // Paso 3 del Diagrama: Canje de código por tokens
-        const res = await fetch(`${CONFIG.cognitoDomain}/oauth2/token`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: payload
-        });
-        const data = await res.json();
-
-        if (res.ok) {
-          setTokens(data);
-          // Guardar access_token para autorizar peticiones a la API
-          sessionStorage.setItem('access_token', data.access_token);
-          sessionStorage.removeItem('code_verifier');
-          window.history.replaceState({}, document.title, "/");
-        } else {
-          console.error("Error devuelto por Cognito:", data);
-        }
-      } catch (err) {
-        console.error("Error al obtener tokens:", err);
-      }
-    };
-
-    handleCallback();
+    procesarRetorno()
+      .then((nuevos) => nuevos && setTokens(nuevos))
+      .catch((e) => setError(e.message));
   }, []);
 
-  // Paso 1 del Diagrama: GET /oauth2/authorize con PKCE
-  const login = async () => {
-    const verifier = generateCodeVerifier();
-    const challenge = await generateCodeChallenge(verifier);
-    sessionStorage.setItem('code_verifier', verifier);
+  const accessClaims = decodificarJwt(tokens?.access_token);
+  const scopes = accessClaims?.scope || '';
+  
+  // Verificamos permisos basados en los scopes del token
+  const esSolicitante = scopes.includes('solicitudes/write');
+  const esAprobador = scopes.includes('solicitudes/approve');
 
-    const loginUrl = `${CONFIG.cognitoDomain}/oauth2/authorize?` +
-      `client_id=${CONFIG.clientId}&` +
-      `response_type=code&` +
-      `scope=${encodeURIComponent('openid email profile aws.cognito.signin.user.admin')}&` +
-      `redirect_uri=${encodeURIComponent(CONFIG.redirectUri)}&` +
-      `code_challenge=${challenge}&` +
-      `code_challenge_method=S256`;
+  useEffect(() => {
+    if (tokens) {
+      if (esSolicitante) cargarMisSolicitudes();
+      if (esAprobador) cargarTodasSolicitudes();
+    }
+  }, [tokens]);
 
-    window.location.href = loginUrl;
+  const cargarMisSolicitudes = async () => {
+    const res = await api.obtenerMisSolicitudes();
+    if (res.ok) setMisSolicitudes(res.data);
   };
 
-  // Paso 11 del Diagrama: Cerrar sesión SSO en Cognito
-  const logout = () => {
-    sessionStorage.clear();
-    const logoutUrl = `${CONFIG.cognitoDomain}/logout?` +
-      `client_id=${CONFIG.clientId}&` +
-      `logout_uri=${encodeURIComponent(CONFIG.redirectUri)}`;
-    
-    window.location.href = logoutUrl;
+  const cargarTodasSolicitudes = async () => {
+    const res = await api.obtenerTodasSolicitudes();
+    if (res.ok) setTodasSolicitudes(res.data);
   };
 
-  // Paso 6 del Diagrama: Petición con Authorization: Bearer <access_token>
-  const fetchProtectedApi = async () => {
-    const accessToken = sessionStorage.getItem('access_token');
-    if (!accessToken) return alert("Inicia sesión primero");
-
-    try {
-      const res = await fetch(`${CONFIG.apiGatewayUrl}/datos`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-      const data = await res.json();
-      setApiResponse(data);
-    } catch (err) {
-      console.error("Error consumiendo la API:", err);
+  const handleCrear = async (e) => {
+    e.preventDefault();
+    const res = await api.crearSolicitud({ tipo, descripcion });
+    if (res.ok) {
+      setDescripcion('');
+      cargarMisSolicitudes();
+    } else {
+      alert('Error al crear solicitud: ' + JSON.stringify(res.data));
     }
   };
 
+  const handleEvaluar = async (id, estado) => {
+    const comentario = comentarios[id] || '';
+    const res = await api.evaluarSolicitud(id, estado, comentario);
+    if (res.ok) {
+      cargarTodasSolicitudes();
+    } else {
+      alert('Error al evaluar: ' + JSON.stringify(res.data));
+    }
+  };
+
+  if (!tokens) {
+    return (
+      <main style={{ textAlign: 'center', marginTop: '5rem' }}>
+        <h1>Sistema de Gestión de Solicitudes - Pedidos360</h1>
+        {error && <p style={{ color: 'red' }}>{error}</p>}
+        <button onClick={login} style={{ padding: '1rem 2rem', fontSize: '1rem', cursor: 'pointer' }}>
+          Iniciar Sesión con Cognito
+        </button>
+      </main>
+    );
+  }
+
   return (
-    <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
-      <h1>Cognito Integration Demo</h1>
-      {!tokens ? (
-        <button onClick={login}>Iniciar Sesión con Cognito</button>
-      ) : (
-        <div>
-          <p>✅ ¡Autenticado con éxito!</p>
-          <button onClick={fetchProtectedApi} style={{ marginRight: '10px' }}>
-            Consumir API Protegida (/datos)
-          </button>
-          <button onClick={logout} style={{ background: '#ff4d4d', color: '#fff', border: 'none', padding: '0.4rem 0.8rem', cursor: 'pointer' }}>
-            Cerrar Sesión
-          </button>
-        </div>
+    <main style={{ maxWidth: '800px', margin: '0 auto', padding: '2rem' }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>Panel de Usuario ({accessClaims?.username || accessClaims?.sub})</h2>
+        <button onClick={logout} style={{ background: '#b3261e', color: '#fff', border: 'none', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer' }}>
+          Cerrar Sesión
+        </button>
+      </header>
+      <hr style={{ margin: '1rem 0' }} />
+
+      {/* VISTA DE SOLICITANTE */}
+      {esSolicitante && (
+        <section style={{ marginBottom: '2rem' }}>
+          <h3>Crear Nueva Solicitud</h3>
+          <form onSubmit={handleCrear} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: '#f5f5f5', padding: '1rem', borderRadius: '8px' }}>
+            <div>
+              <label>Tipo de Solicitud: </label>
+              <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+                <option value="VACACIONES">Vacaciones</option>
+                <option value="PERMISO_ADMINISTRATIVO">Permiso Administrativo</option>
+                <option value="LICENCIA_MEDICA">Licencia Médica</option>
+                <option value="TRABAJO_REMOTO">Trabajo Remoto</option>
+              </select>
+            </div>
+            <div>
+              <label>Descripción / Motivo: </label>
+              <input type="text" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} required style={{ width: '100%', padding: '0.5rem' }} />
+            </div>
+            <button type="submit" style={{ background: '#2f5bea', color: '#fff', border: 'none', padding: '0.7rem', borderRadius: '4px', cursor: 'pointer' }}>
+              Enviar Solicitud
+            </button>
+          </form>
+
+          <h3>Mis Solicitudes Ingresadas</h3>
+          <table border="1" cellPadding="8" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Tipo</th>
+                <th>Descripción</th>
+                <th>Estado</th>
+                <th>Comentario Aprobador</th>
+              </tr>
+            </thead>
+            <tbody>
+              {misSolicitudes.map((s) => (
+                <tr key={s.id}>
+                  <td>{s.id}</td>
+                  <td>{s.tipo}</td>
+                  <td>{s.descripcion}</td>
+                  <td><strong>{s.estado}</strong></td>
+                  <td>{s.comentarioAprobador || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
       )}
-      {apiResponse && (
-        <pre style={{ background: '#f4f4f4', padding: '1rem', marginTop: '1rem', borderRadius: '4px' }}>
-          {JSON.stringify(apiResponse, null, 2)}
-        </pre>
+
+      {/* VISTA DE APROBADOR */}
+      {esAprobador && (
+        <section>
+          <h3>Panel de Aprobación (Aprobador)</h3>
+          <table border="1" cellPadding="8" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Usuario</th>
+                <th>Tipo</th>
+                <th>Descripción</th>
+                <th>Estado Actual</th>
+                <th>Comentario / Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {todasSolicitudes.map((s) => (
+                <tr key={s.id}>
+                  <td>{s.id}</td>
+                  <td>{s.usuarioId}</td>
+                  <td>{s.tipo}</td>
+                  <td>{s.descripcion}</td>
+                  <td><strong>{s.estado}</strong></td>
+                  <td>
+                    <input
+                      type="text"
+                      placeholder="Comentario..."
+                      value={comentarios[s.id] || ''}
+                      onChange={(e) => setComentarios({ ...comentarios, [s.id]: e.target.value })}
+                      style={{ display: 'block', marginBottom: '5px', width: '90%' }}
+                    />
+                    <button onClick={() => handleEvaluar(s.id, 'APROBADA')} style={{ background: '#1a7f45', color: '#fff', border: 'none', padding: '0.3rem 0.6rem', marginRight: '5px', cursor: 'pointer' }}>
+                      Aprobar
+                    </button>
+                    <button onClick={() => handleEvaluar(s.id, 'RECHAZADA')} style={{ background: '#b3261e', color: '#fff', border: 'none', padding: '0.3rem 0.6rem', cursor: 'pointer' }}>
+                      Rechazar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
       )}
-    </div>
+    </main>
   );
 }
