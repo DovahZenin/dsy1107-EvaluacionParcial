@@ -7,3 +7,8 @@ output "cognito_client_id" {
   value       = aws_cognito_user_pool_client.spa.id
   description = "ID del cliente de aplicación para el frontend"
 }
+
+output "cognito_user_pool_id" {
+  value       = aws_cognito_user_pool.pool.id
+  description = "ID del User Pool de Cognito (para issuer-uri del backend)"
+}
