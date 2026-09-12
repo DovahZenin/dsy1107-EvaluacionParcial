@@ -23,6 +23,8 @@ export default function App() {
 
   const accessClaims = decodificarJwt(tokens?.access_token);
   const scopes = accessClaims?.scope || '';
+  const idClaims = decodificarJwt(tokens?.id_token);
+  const nombreUsuario = idClaims?.['cognito:username'] || idClaims?.email || accessClaims?.sub;
   
   // Verificamos permisos basados en los scopes del token
   const esSolicitante = scopes.includes('solicitudes/write');
@@ -81,7 +83,7 @@ export default function App() {
   return (
     <main style={{ maxWidth: '800px', margin: '0 auto', padding: '2rem' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>Panel de Usuario ({accessClaims?.username || accessClaims?.sub})</h2>
+        <h2>Panel de Usuario ({nombreUsuario})</h2>
         <button onClick={logout} style={{ background: '#b3261e', color: '#fff', border: 'none', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer' }}>
           Cerrar Sesión
         </button>

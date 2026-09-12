@@ -1,6 +1,6 @@
 import { CONFIG } from './config.js';
 
-const scopes = 'openid email profile solicitudes/read solicitudes/write solicitudes/approve';
+const scopes = 'openid email profile solicitudes/read solicitudes/write';
 
 const CLAVE_VERIFIER = 'dsy1107.pkce_verifier';
 const CLAVE_STATE = 'dsy1107.state';

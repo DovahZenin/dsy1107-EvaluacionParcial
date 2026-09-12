@@ -31,17 +31,78 @@ resource "aws_apigatewayv2_authorizer" "cognito" {
   }
 }
 
-# 4. Integración HTTP hacia el Backend
-resource "aws_apigatewayv2_integration" "backend" {
+# 4. Integraciones HTTP hacia el Backend.
+#
+# Cada ruta tiene SU integración con el path completo en integration_uri: el
+# API Gateway HTTP reenvía una petición a la URI de integración tal cual
+# (sustituyendo los path-variables como {id}), NO le pega la ruta de la
+# request delante. Por eso no basta con "http://IP:8080": el backend recibiría
+# "/" y contestaría 404.
+#
+# La IP real la escribe el script de ECS al desplegar (la task es efímera);
+# integration_uri se inicializa con un placeholder y queda fuera del control
+# de Terraform (ignore_changes) para que el script pueda re-apuntarlo.
+locals {
+  backend_base = "http://127.0.0.1:8080"
+}
+
+resource "aws_apigatewayv2_integration" "get_mis_solicitudes" {
   api_id                 = aws_apigatewayv2_api.http_api.id
   integration_type       = "HTTP_PROXY"
-  # Se inicializa con un valor temporal; el script de ECS escribirá la IP real al desplegar
-  integration_uri        = "http://127.0.0.1:8080/dummy" 
+  integration_uri        = "${local.backend_base}/api/solicitudes/mis-solicitudes"
   integration_method     = "ANY"
   payload_format_version = "1.0"
 
-  lifecycle { 
-    ignore_changes = [integration_uri] 
+  lifecycle {
+    ignore_changes = [integration_uri]
+  }
+}
+
+resource "aws_apigatewayv2_integration" "post_solicitudes" {
+  api_id                 = aws_apigatewayv2_api.http_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "${local.backend_base}/api/solicitudes"
+  integration_method     = "ANY"
+  payload_format_version = "1.0"
+
+  lifecycle {
+    ignore_changes = [integration_uri]
+  }
+}
+
+resource "aws_apigatewayv2_integration" "delete_solicitudes" {
+  api_id                 = aws_apigatewayv2_api.http_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "${local.backend_base}/api/solicitudes/{id}"
+  integration_method     = "ANY"
+  payload_format_version = "1.0"
+
+  lifecycle {
+    ignore_changes = [integration_uri]
+  }
+}
+
+resource "aws_apigatewayv2_integration" "get_todas" {
+  api_id                 = aws_apigatewayv2_api.http_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "${local.backend_base}/api/solicitudes/todas"
+  integration_method     = "ANY"
+  payload_format_version = "1.0"
+
+  lifecycle {
+    ignore_changes = [integration_uri]
+  }
+}
+
+resource "aws_apigatewayv2_integration" "patch_evaluar" {
+  api_id                 = aws_apigatewayv2_api.http_api.id
+  integration_type       = "HTTP_PROXY"
+  integration_uri        = "${local.backend_base}/api/solicitudes/{id}/evaluar"
+  integration_method     = "ANY"
+  payload_format_version = "1.0"
+
+  lifecycle {
+    ignore_changes = [integration_uri]
   }
 }
 
@@ -51,7 +112,7 @@ resource "aws_apigatewayv2_integration" "backend" {
 resource "aws_apigatewayv2_route" "get_mis_solicitudes" {
   api_id               = aws_apigatewayv2_api.http_api.id
   route_key            = "GET /api/solicitudes/mis-solicitudes"
-  target               = "integrations/${aws_apigatewayv2_integration.backend.id}"
+  target               = "integrations/${aws_apigatewayv2_integration.get_mis_solicitudes.id}"
   authorizer_id        = aws_apigatewayv2_authorizer.cognito.id
   authorization_type   = "JWT"
   authorization_scopes = ["solicitudes/read"]
@@ -60,7 +121,7 @@ resource "aws_apigatewayv2_route" "get_mis_solicitudes" {
 resource "aws_apigatewayv2_route" "post_solicitudes" {
   api_id               = aws_apigatewayv2_api.http_api.id
   route_key            = "POST /api/solicitudes"
-  target               = "integrations/${aws_apigatewayv2_integration.backend.id}"
+  target               = "integrations/${aws_apigatewayv2_integration.post_solicitudes.id}"
   authorizer_id        = aws_apigatewayv2_authorizer.cognito.id
   authorization_type   = "JWT"
   authorization_scopes = ["solicitudes/write"]
@@ -69,7 +130,7 @@ resource "aws_apigatewayv2_route" "post_solicitudes" {
 resource "aws_apigatewayv2_route" "delete_solicitudes" {
   api_id               = aws_apigatewayv2_api.http_api.id
   route_key            = "DELETE /api/solicitudes/{id}"
-  target               = "integrations/${aws_apigatewayv2_integration.backend.id}"
+  target               = "integrations/${aws_apigatewayv2_integration.delete_solicitudes.id}"
   authorizer_id        = aws_apigatewayv2_authorizer.cognito.id
   authorization_type   = "JWT"
   authorization_scopes = ["solicitudes/write"]
@@ -79,7 +140,7 @@ resource "aws_apigatewayv2_route" "delete_solicitudes" {
 resource "aws_apigatewayv2_route" "get_todas" {
   api_id               = aws_apigatewayv2_api.http_api.id
   route_key            = "GET /api/solicitudes/todas"
-  target               = "integrations/${aws_apigatewayv2_integration.backend.id}"
+  target               = "integrations/${aws_apigatewayv2_integration.get_todas.id}"
   authorizer_id        = aws_apigatewayv2_authorizer.cognito.id
   authorization_type   = "JWT"
   authorization_scopes = ["solicitudes/approve"]
@@ -88,7 +149,7 @@ resource "aws_apigatewayv2_route" "get_todas" {
 resource "aws_apigatewayv2_route" "patch_evaluar" {
   api_id               = aws_apigatewayv2_api.http_api.id
   route_key            = "PATCH /api/solicitudes/{id}/evaluar"
-  target               = "integrations/${aws_apigatewayv2_integration.backend.id}"
+  target               = "integrations/${aws_apigatewayv2_integration.patch_evaluar.id}"
   authorizer_id        = aws_apigatewayv2_authorizer.cognito.id
   authorization_type   = "JWT"
   authorization_scopes = ["solicitudes/approve"]

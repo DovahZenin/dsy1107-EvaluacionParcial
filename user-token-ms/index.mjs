@@ -28,6 +28,11 @@ const SCOPES_POR_GRUPO = {
   aprobadores: ['solicitudes/read', 'solicitudes/write', 'solicitudes/approve'],
 };
 
+// El authorize del front pide SOLO solicitudes/read y solicitudes/write: jamas
+// pide approve. Asi, la unica fuente de approve es este Lambda (scopesToAdd).
+// En la verificacion empirica scopesToRemove no surte efecto para scopes que ya
+// vienen del authorize, por eso el front no pide approve: quien no es aprobador
+// simplemente nunca lo recibe.
 export const handler = async (event) => {
   // Cognito ya resolvio la pertenencia a grupos antes de llamarnos: no hay que
   // consultar el directorio, viene resuelta en el evento.
@@ -35,7 +40,9 @@ export const handler = async (event) => {
 
   // El Set evita que alguien que este en los dos grupos reciba solicitudes/read
   // dos veces en el mismo claim.
-  const scopes = [...new Set(grupos.flatMap((grupo) => SCOPES_POR_GRUPO[grupo] ?? []))];
+  const otorgados = new Set(grupos.flatMap((grupo) => SCOPES_POR_GRUPO[grupo] ?? []));
+
+  const scopesToAdd = [...otorgados];
 
   // Queda en CloudWatch. En clase es la prueba de que el Lambda corrio y de por
   // que el token salio como salio.
@@ -47,7 +54,7 @@ export const handler = async (event) => {
     JSON.stringify({
       usuario: event.request.userAttributes?.email ?? event.userName,
       grupos,
-      scopes,
+      scopesToAdd,
     }),
   );
 
@@ -57,7 +64,7 @@ export const handler = async (event) => {
       // el ID token dice QUIEN eres, el access token dice QUE PUEDES HACER.
       // Poner scope en el ID token es el error conceptual que 1.2.1 evita.
       accessTokenGeneration: {
-        scopesToAdd: scopes,
+        scopesToAdd,
       },
     },
   };

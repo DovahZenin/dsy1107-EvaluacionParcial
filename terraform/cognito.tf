@@ -84,6 +84,20 @@ resource "aws_cognito_user" "demo" {
   message_action = "SUPPRESS"
 }
 
+resource "aws_cognito_user" "final" {
+  user_pool_id = aws_cognito_user_pool.pool.id
+  username     = "Ryuma@gmail.com"
+  password     = "Ryuma123456"
+
+  attributes = {
+    email          = "Ryuma@gmail.com"
+    email_verified = true
+    name           = "Ryuma"
+  }
+  
+  message_action = "SUPPRESS"
+}
+
 # 5. Declaración de Scopes (Resource Server)
 resource "aws_cognito_resource_server" "solicitudes" {
   user_pool_id = aws_cognito_user_pool.pool.id
@@ -122,4 +136,11 @@ resource "aws_cognito_user_in_group" "demo_solicitante" {
   user_pool_id = aws_cognito_user_pool.pool.id
   username     = aws_cognito_user.demo.username
   group_name   = aws_cognito_user_group.solicitantes.name
+}
+
+
+resource "aws_cognito_user_in_group" "demo_aprovador" {
+  user_pool_id = aws_cognito_user_pool.pool.id
+  username     = aws_cognito_user.final.username
+  group_name   = aws_cognito_user_group.aprobadores.name
 }

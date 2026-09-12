@@ -45,14 +45,28 @@ leer() {
   fi
 }
 
+# Igual que leer() pero para outputs no primitivos (mapas), que no admiten -raw.
+leer_json() {
+  local desde_entorno="${!1:-}"
+  if [ -n "$desde_entorno" ]; then
+    echo "$desde_entorno"
+  elif command -v terraform >/dev/null 2>&1 && $TF output -json "$2" >/dev/null 2>&1; then
+    $TF output -json "$2"
+  else
+    echo "Falta \$$1 y no hay salida '$2' en Terraform." >&2
+    return 1
+  fi
+}
+
 echo "==> Leyendo la configuracion"
 REPO="$(leer ECR_REPO ecs_repositorio)"
 CLUSTER="$(leer ECS_CLUSTER ecs_cluster)"
 SERVICIO="$(leer ECS_SERVICE ecs_servicio)"
 API_ID="$(leer API_ID api_id)"
-INTEGRACION_ID="$(leer INTEGRATION_ID integracion_id)"
-INTEGRACION_PRODUCTOS_COL="$(leer INTEGRATION_PRODUCTOS_COL_ID integracion_productos_coleccion_id)"
-INTEGRACION_PRODUCTOS_ELE="$(leer INTEGRATION_PRODUCTOS_ELE_ID integracion_productos_elemento_id)"
+
+# Hay una integracion por ruta (ver apigateway.tf). El mapa clave -> id sale
+# de Terraform en JSON; en el pipeline llega como variable API_INTEGRACIONES.
+INTEGRACIONES_JSON="$(leer_json API_INTEGRACIONES integraciones_id)"
 
 # Etiqueta unica por despliegue, como pedia la lamina 19: reutilizar una
 # etiqueta hace imposible saber que esta corriendo, y volver atras.
@@ -198,32 +212,32 @@ if [ -z "$IP" ] || [ "$IP" = "None" ]; then
   exit 1
 fi
 
-# Las TRES integraciones apuntan a la misma task, cada una a su ruta. Olvidar
-# una no rompe nada a la vista: esa ruta sigue respondiendo, pero contra la IP
-# de la task anterior, que ya no existe. Por eso van juntas en un bucle y no
-# en tres llamadas sueltas que se puedan desincronizar al editarlas.
-reapuntar() {  # $1 = id de la integracion, $2 = ruta en el backend
+# Hay UNA integracion por ruta, y cada una lleva su path completo en la URI.
+# En un HTTP API el gateway reenvia a la URI tal cual (sustituyendo {id} por el
+# valor real de la ruta) y NO le pega delante el path de la request: con la base
+# sola el backend recibiria "/" y contestaria 404. Por eso aqui se reescribe
+# cada integration_uri a la IP nueva conservando el path que le toca.
+declare -A INTEGRACIONES
+while read -r CLAVE ID; do
+  INTEGRACIONES["$CLAVE"]="$ID"
+done < <(echo "$INTEGRACIONES_JSON" | jq -r 'to_entries[] | "\(.key) \(.value)"')
+
+reapuntar() {  # $1 = id de la integracion, $2 = path que debe servir
   aws apigatewayv2 update-integration --region "$REGION" \
     --api-id "$API_ID" \
     --integration-id "$1" \
-    --integration-uri "http://${IP}:8080$2" >/dev/null
+    --integration-uri "http://${IP}:8080${2}" >/dev/null
 }
 
-reapuntar "$INTEGRACION_ID"            "/datos"
-reapuntar "$INTEGRACION_PRODUCTOS_COL" "/productos"
-
-# La llave de {proxy} va escapada para que bash no la toque: tiene que llegar
-# literal al API Gateway, que es quien la sustituye por el trozo de ruta que
-# capturo {proxy+}.
-reapuntar "$INTEGRACION_PRODUCTOS_ELE" "/productos/{proxy}"
+reapuntar "${INTEGRACIONES[mis_solicitudes]}" "/api/solicitudes/mis-solicitudes"
+reapuntar "${INTEGRACIONES[post]}"            "/api/solicitudes"
+reapuntar "${INTEGRACIONES[delete]}"          "/api/solicitudes/{id}"
+reapuntar "${INTEGRACIONES[todas]}"           "/api/solicitudes/todas"
+reapuntar "${INTEGRACIONES[evaluar]}"         "/api/solicitudes/{id}/evaluar"
 
 echo
 echo "OK  ${VERSION} desplegada."
-echo "    backend directo : http://${IP}:8080/actuator/health"
-echo "    productos       : http://${IP}:8080/productos"
-if URL_API="$($TF output -raw url_datos_protegido 2>/dev/null)"; then
-  echo "    via API Gateway : ${URL_API}   (401 sin token)"
-fi
+echo "    backend directo : http://${IP}:8080 (devuelve 401 sin token)"
 echo
 echo "    La IP cambia en cada despliegue; por eso este script reapunta el"
 echo "    gateway. apigateway.tf lo sabe: ignore_changes en integration_uri."
