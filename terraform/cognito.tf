@@ -3,7 +3,7 @@ resource "aws_cognito_user_pool" "pool" {
   name                     = "dsy1107-grupo8"
   username_attributes      = ["email"]
   auto_verified_attributes = ["email"]
-  
+
   user_pool_tier = "ESSENTIALS"
 
   password_policy {
@@ -41,8 +41,8 @@ resource "aws_cognito_user_pool_client" "spa" {
 
   allowed_oauth_flows_user_pool_client = true
   allowed_oauth_flows                  = ["code"]
-  supported_identity_providers          = ["COGNITO"]
-  
+  supported_identity_providers         = ["COGNITO"]
+
   allowed_oauth_scopes = [
     "openid",
     "email",
@@ -80,7 +80,7 @@ resource "aws_cognito_user" "demo" {
     email_verified = true
     name           = "DovahZenin"
   }
-  
+
   message_action = "SUPPRESS"
 }
 
@@ -94,7 +94,21 @@ resource "aws_cognito_user" "final" {
     email_verified = true
     name           = "Ryuma"
   }
-  
+
+  message_action = "SUPPRESS"
+}
+
+resource "aws_cognito_user" "tres" {
+  user_pool_id = aws_cognito_user_pool.pool.id
+  username     = "Willy@gmail.com"
+  password     = "Willy123456"
+
+  attributes = {
+    email          = "Willy@gmail.com"
+    email_verified = true
+    name           = "Willy"
+  }
+
   message_action = "SUPPRESS"
 }
 
@@ -104,17 +118,17 @@ resource "aws_cognito_resource_server" "solicitudes" {
   identifier   = "solicitudes"
   name         = "API de Solicitudes"
 
-  scope { 
-    scope_name = "read" 
-    scope_description = "Leer solicitudes" 
+  scope {
+    scope_name        = "read"
+    scope_description = "Leer solicitudes"
   }
-  scope { 
-    scope_name = "write" 
-    scope_description = "Crear, modificar y eliminar solicitudes" 
+  scope {
+    scope_name        = "write"
+    scope_description = "Crear, modificar y eliminar solicitudes"
   }
-  scope { 
-    scope_name = "approve" 
-    scope_description = "Aprobar o rechazar solicitudes" 
+  scope {
+    scope_name        = "approve"
+    scope_description = "Aprobar o rechazar solicitudes"
   }
 }
 
@@ -135,6 +149,12 @@ resource "aws_cognito_user_group" "aprobadores" {
 resource "aws_cognito_user_in_group" "demo_solicitante" {
   user_pool_id = aws_cognito_user_pool.pool.id
   username     = aws_cognito_user.demo.username
+  group_name   = aws_cognito_user_group.solicitantes.name
+}
+
+resource "aws_cognito_user_in_group" "demo_solicitante2" {
+  user_pool_id = aws_cognito_user_pool.pool.id
+  username     = aws_cognito_user.tres.username
   group_name   = aws_cognito_user_group.solicitantes.name
 }
 

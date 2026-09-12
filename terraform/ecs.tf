@@ -80,7 +80,8 @@ resource "aws_ecs_task_definition" "backend" {
       environment = [
         { name = "SPRING_DATASOURCE_URL", value = "jdbc:postgresql://${aws_db_instance.postgres.address}:5432/${aws_db_instance.postgres.db_name}" },
         { name = "SPRING_DATASOURCE_USERNAME", value = aws_db_instance.postgres.username },
-        { name = "SPRING_DATASOURCE_PASSWORD", value = aws_db_instance.postgres.password }
+        { name = "SPRING_DATASOURCE_PASSWORD", value = aws_db_instance.postgres.password },
+        { name = "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI", value = "https://cognito-idp.${data.aws_region.current.region}.amazonaws.com/${aws_cognito_user_pool.pool.id}" }
       ]
       logConfiguration = {
         logDriver = "awslogs"

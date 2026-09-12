@@ -94,7 +94,7 @@ export default function App() {
       {esSolicitante && (
         <section style={{ marginBottom: '2rem' }}>
           <h3>Crear Nueva Solicitud</h3>
-          <form onSubmit={handleCrear} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: '#f5f5f5', padding: '1rem', borderRadius: '8px' }}>
+          <form onSubmit={handleCrear} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: '#1f2433', border: '1px solid #2e3448', padding: '1rem', borderRadius: '8px' }}>
             <div>
               <label>Tipo de Solicitud: </label>
               <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
@@ -114,8 +114,8 @@ export default function App() {
           </form>
 
           <h3>Mis Solicitudes Ingresadas</h3>
-          <table border="1" cellPadding="8" style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
+          <table border="1" cellPadding="8" style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #2e3448' }}>
+            <thead style={{ background: '#1f2433' }}>
               <tr>
                 <th>ID</th>
                 <th>Tipo</th>
@@ -143,8 +143,8 @@ export default function App() {
       {esAprobador && (
         <section>
           <h3>Panel de Aprobación (Aprobador)</h3>
-          <table border="1" cellPadding="8" style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
+          <table border="1" cellPadding="8" style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #2e3448' }}>
+            <thead style={{ background: '#1f2433' }}>
               <tr>
                 <th>ID</th>
                 <th>Usuario</th>
