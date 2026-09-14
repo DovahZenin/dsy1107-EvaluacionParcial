@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { login, logout, procesarRetorno, getTokens, decodificarJwt } from './auth.js';
 import * as api from './api.js';
 
