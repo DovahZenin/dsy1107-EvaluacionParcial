@@ -70,3 +70,6 @@ jobs:
      #     [ -n "$APP_ID" ] || { echo "::error::Falta la variable AMPLIFY_APP_ID. Ejecuta ./sincronizar-github.sh"; exit 1; }
      #     scripts/publicar-amplify.sh "$APP_ID" "$RAMA" "$RUTA_BUILD"
      #     echo "### Front publicado en ${DESTINO%/}" >> "$GITHUB_STEP_SUMMARY"
+
+
+     
