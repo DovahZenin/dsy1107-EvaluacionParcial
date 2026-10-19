@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { login, logout, procesarRetorno, getTokens, decodificarJwt } from './auth.js';
+import { login, logout, procesarRetorno, getTokens, decodificarJwt, limpiarSesion } from './auth.js';
 import * as api from './api.js';
 
 export default function App() {
   const [tokens, setTokens] = useState(getTokens());
   const [error, setError] = useState(null);
+  const [errorApi, setErrorApi] = useState(null);
   
   // Estados para Solicitante
   const [misSolicitudes, setMisSolicitudes] = useState([]);
@@ -22,13 +23,18 @@ export default function App() {
   }, []);
 
   const accessClaims = decodificarJwt(tokens?.access_token);
-  const scopes = accessClaims?.scope || '';
+  const scopeSet = new Set((accessClaims?.scope || '').split(' ').filter(Boolean));
+  const grupos = new Set(accessClaims?.['cognito:groups'] || []);
   const idClaims = decodificarJwt(tokens?.id_token);
-  const nombreUsuario = idClaims?.['cognito:username'] || idClaims?.email || accessClaims?.sub;
+  const nombreUsuario = idClaims?.email || idClaims?.name || idClaims?.['cognito:username'] || accessClaims?.sub;
   
-  // Verificamos permisos basados en los scopes del token
-  const esSolicitante = scopes.includes('solicitudes/write');
-  const esAprobador = scopes.includes('solicitudes/approve');
+  const esSolicitante = scopeSet.has('solicitudes/write');
+  const esAprobador = scopeSet.has('solicitudes/approve');
+  const rol = esAprobador && esSolicitante
+    ? 'Aprobador y Solicitante'
+    : esAprobador
+      ? 'Aprobador'
+      : 'Solicitante';
 
   useEffect(() => {
     if (tokens) {
@@ -37,14 +43,38 @@ export default function App() {
     }
   }, [tokens]);
 
+  const manejarErrorApi = (res) => {
+    if (res.status === 401) {
+      limpiarSesion();
+      setTokens(null);
+      setError('Sesión expirada o inválida. Vuelve a iniciar sesión.');
+    } else if (res.status === 403) {
+      setErrorApi('No tienes permisos para esta operación.');
+    } else if (res.status === 0) {
+      setErrorApi('Sin conexión con la API: ' + (res.data?.message ?? ''));
+    } else {
+      setErrorApi('Error de la API (' + res.status + ').');
+    }
+  };
+
   const cargarMisSolicitudes = async () => {
     const res = await api.obtenerMisSolicitudes();
-    if (res.ok) setMisSolicitudes(res.data);
+    if (res.ok) {
+      setMisSolicitudes(res.data);
+      setErrorApi(null);
+    } else {
+      manejarErrorApi(res);
+    }
   };
 
   const cargarTodasSolicitudes = async () => {
     const res = await api.obtenerTodasSolicitudes();
-    if (res.ok) setTodasSolicitudes(res.data);
+    if (res.ok) {
+      setTodasSolicitudes(res.data);
+      setErrorApi(null);
+    } else {
+      manejarErrorApi(res);
+    }
   };
 
   const handleCrear = async (e) => {
@@ -54,7 +84,7 @@ export default function App() {
       setDescripcion('');
       cargarMisSolicitudes();
     } else {
-      alert('Error al crear solicitud: ' + JSON.stringify(res.data));
+      manejarErrorApi(res);
     }
   };
 
@@ -64,7 +94,7 @@ export default function App() {
     if (res.ok) {
       cargarTodasSolicitudes();
     } else {
-      alert('Error al evaluar: ' + JSON.stringify(res.data));
+      manejarErrorApi(res);
     }
   };
 
@@ -80,14 +110,35 @@ export default function App() {
     );
   }
 
+  if (!esSolicitante && !esAprobador) {
+    return (
+      <main style={{ textAlign: 'center', marginTop: '5rem' }}>
+        <h2>Sin permisos asignados</h2>
+        <p style={{ color: '#b3261e' }}>
+          Tu usuario no tiene scopes de solicitudes. Pide a un administrador asignarte al grupo
+          &quot;solicitantes&quot; o &quot;aprobadores&quot; y vuelve a iniciar sesión.
+        </p>
+        <button onClick={logout} style={{ background: '#b3261e', color: '#fff', border: 'none', padding: '0.75rem 1.5rem', borderRadius: '4px', cursor: 'pointer' }}>
+          Cerrar Sesión
+        </button>
+      </main>
+    );
+  }
+
   return (
     <main style={{ maxWidth: '800px', margin: '0 auto', padding: '2rem' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>Panel de Usuario ({nombreUsuario})</h2>
-        <button onClick={logout} style={{ background: '#b3261e', color: '#fff', border: 'none', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer' }}>
-          Cerrar Sesión
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <span style={{ border: '1px solid #2e3448', borderRadius: '12px', padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}>
+            Rol: {rol}{grupos.size > 0 ? ` (${[...grupos].join(', ')})` : ''}
+          </span>
+          <button onClick={logout} style={{ background: '#b3261e', color: '#fff', border: 'none', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer' }}>
+            Cerrar Sesión
+          </button>
+        </div>
       </header>
+      {errorApi && <p style={{ color: '#ff6b6b' }}>{errorApi}</p>}
       <hr style={{ margin: '1rem 0' }} />
 
       {/* VISTA DE SOLICITANTE */}

@@ -1,9 +1,10 @@
-import { getAccessToken } from './auth.js';
+import { getAccessToken, asegurarTokenVigente, limpiarSesion } from './auth.js';
 import { CONFIG } from './config.js';
 
 const API_URL = CONFIG.apiGatewayUrl;
 
 async function peticion(endpoint, options = {}) {
+  await asegurarTokenVigente();
   const token = getAccessToken();
   const headers = {
     'Content-Type': 'application/json',
@@ -20,6 +21,15 @@ async function peticion(endpoint, options = {}) {
     if (response.status === 204) return { ok: true, status: 204 };
     
     const data = await response.json().catch(() => ({}));
+
+    if (response.status === 401) {
+      limpiarSesion();
+      return { ok: false, status: 401, data, noAutorizado: true };
+    }
+    if (response.status === 403) {
+      return { ok: false, status: 403, data, noAutorizado: true };
+    }
+
     return { ok: response.ok, status: response.status, data };
   } catch (error) {
     return { ok: false, status: 0, data: { message: error.message } };
