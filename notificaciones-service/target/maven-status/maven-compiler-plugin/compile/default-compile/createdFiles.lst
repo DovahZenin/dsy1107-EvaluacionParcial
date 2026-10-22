@@ -1,0 +1,12 @@
+com\duoc\notificaciones\notificacion\NotificacionService.class
+com\duoc\notificaciones\auditoria\AuditoriaService.class
+com\duoc\notificaciones\auditoria\AuditoriaSolicitudConsumer.class
+com\duoc\notificaciones\model\MensajeSolicitud.class
+com\duoc\notificaciones\model\ManejadorDeAck.class
+com\duoc\notificaciones\config\MensajeriaProperties$Ruta.class
+com\duoc\notificaciones\config\MensajeriaProperties.class
+com\duoc\notificaciones\config\RabbitTopologyConfig.class
+com\duoc\notificaciones\model\NoReintentableException.class
+com\duoc\notificaciones\notificacion\NotificacionSolicitudCreadaConsumer.class
+com\duoc\notificaciones\notificacion\NotificacionSolicitudEvaluadaConsumer.class
+com\duoc\notificaciones\NotificacionesApplication.class

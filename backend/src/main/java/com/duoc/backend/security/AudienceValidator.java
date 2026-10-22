@@ -22,8 +22,15 @@ public class AudienceValidator implements OAuth2TokenValidator<Jwt> {
 
     @Override
     public OAuth2TokenValidatorResult validate(Jwt token) {
+        // Cognito: el ID token lleva "aud" (el client id), pero el ACCESS token
+        // (el que el frontend manda a la API) no trae "aud" sino "client_id".
+        // Se acepta cualquiera de los dos: el valor esperado es el mismo client id.
         List<String> aud = token.getAudience();
-        return aud != null && aud.contains(audience)
+        if (aud != null && aud.contains(audience)) {
+            return OAuth2TokenValidatorResult.success();
+        }
+        String clientId = token.getClaimAsString("client_id");
+        return audience.equals(clientId)
                 ? OAuth2TokenValidatorResult.success()
                 : OAuth2TokenValidatorResult.failure(ERROR);
     }

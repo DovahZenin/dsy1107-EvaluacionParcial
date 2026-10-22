@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: notificaciones-service
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASS:guest}
+  rabbitmq.listener:
+    # ACK explicito en cada consumer: nadie hace ack automatico.
+    simple:
+      acknowledge-mode: manual
+      prefetch: 10
+      # Un NACK sin requeue va directo a la DLX (no re-entra a la cola).
+      default-requeue-rejected: false
+
+# ---------------------------------------------------------------------------
+# Mismo bloque unico que admin-rabbit-service y backend: una sola fuente de
+# nombres para todo el sistema. Cambia en los tres application.* y reinicia.
+# ---------------------------------------------------------------------------
+mensajeria:
+  exchange-solicitudes: solicitudes.topic
+  exchange-muerta: solicitudes.dlx
+  reintentos: 3
+
+  solicitudes:
+    creada:
+      routing-key: solicitud.creada
+      cola: notificaciones.solicitud-creada
+      dlq: notificaciones.solicitud-creada.dlq
+    evaluada:
+      routing-key: solicitud.evaluada
+      cola: notificaciones.solicitud-evaluada
+      dlq: notificaciones.solicitud-evaluada.dlq
+    auditoria:
+      routing-key: solicitud.*
+      cola: auditoria.solicitudes
+      dlq: auditoria.solicitudes.dlq

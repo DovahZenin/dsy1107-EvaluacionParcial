@@ -18,10 +18,14 @@ Cognito (Hosted UI)      API Gateway (autorizador JWT: firma, issuer, audience)
                               │  rutas con scopes por rol
                               ▼
                         ECS Fargate (Spring Boot)  ──▶  RDS PostgreSQL
-                              │
-                    JwtDecoder propio: firma + exp + issuer + audience
-                    @PreAuthorize: scopes en todas las rutas
+                              │  publica evento solicitud.creada
+                              │  (sidecar Tailscale, proxy SOCKS5 127.0.0.1:1055)
+                              ▼  tailnet (WireGuard)
+                  RabbitMQ local (Docker)  ──▶  notificaciones-service / admin-rabbit-service
 ```
+
+En el backend, un `JwtDecoder` propio valida firma + `exp` + issuer + audience, y
+`@PreAuthorize` exige scopes en todas las rutas.
 
 Una Lambda de **Pre Token Generation** (`user-token-ms/`) inyecta scopes por
 grupo: `solicitantes` → `solicitudes/read`, `solicitudes/write`;
@@ -85,10 +89,68 @@ npm run build
 
 1. `npm run dev` → abrir `http://localhost:5173` → **Iniciar Sesión con Cognito**.
 2. Solicitante: crear y ver sus solicitudes. Aprobador: panel de aprobación.
-3. API con Postman (base: `https://jidj8317pa.execute-api.us-east-1.amazonaws.com`):
+3. API con Postman (base: `https://vgit7wwug4.execute-api.us-east-1.amazonaws.com`):
    - `GET /api/solicitudes/todas` (scope `solicitudes/approve`)
    - `GET /api/solicitudes/mis-solicitudes` (scope `solicitudes/read`)
    - Sin token → 401; token sin scope → 403 (esto es lo que demuestra la validación).
+
+## Mensajería: eventos de la nube hacia un RabbitMQ local
+
+El backend publica un evento `solicitud.creada` (`RabbitPublicacionConfig` +
+`SolicitudEventPublisher`) cada vez que se crea una solicitud. Para la demo, ese
+evento viaja desde ECS hasta el **RabbitMQ que corre en Docker en el equipo**,
+aunque no haya conectividad directa entre ambos:
+
+- Un sidecar `tailscale/tailscale` corre en la misma task de Fargate que el
+  backend. Como la task usa red `awsvpc`, ambos contenedores comparten la misma
+  interfaz (se ven en `127.0.0.1`).
+- Fargate no otorga `NET_ADMIN`, así que Tailscale corre en **modo userspace** y
+  expone un **proxy SOCKS5** en `127.0.0.1:1055`.
+- El backend recibe `JAVA_TOOL_OPTIONS=-DsocksProxyHost=127.0.0.1 -DsocksProxyPort=1055`,
+  de modo que sus conexiones AMQP salen por la tailnet (cifradas con WireGuard)
+  hasta la IP estable del equipo local. El tráfico que no es de la tailnet se
+  sigue relayando a internet.
+
+Como `guest` de RabbitMQ solo acepta conexiones desde `localhost`, el script crea
+un usuario acotado (`nube`) con permisos solo sobre `solicitudes.topic` y
+`solicitudes.dlx`.
+
+### Encender el puente
+
+```bash
+# 1) Levantar el Rabbit local y los consumidores (declaran la topología)
+docker compose up -d
+# notificaciones-service y admin-rabbit-service (consumidores) ya corriendo
+
+# 2) Conectar la nube al Rabbit local (la IP es la del equipo en la tailnet)
+tailscale ip -4                                  # p. ej. 100.116.47.21
+./scripts/conectar-rabbit-local.sh configurar 100.116.47.21
+
+# 3) Crear una solicitud desde el frontend y ver el evento llegar en local:
+#    consola de notificaciones-service → "[notificacion] ..." y "[auditoria] ..."
+```
+
+### Apagar el puente (rollback)
+
+```bash
+./scripts/conectar-rabbit-local.sh apagar
+```
+
+Sin el puente, el backend no falla: registra un `WARN` y sigue operando (la
+publicación es *best-effort*, nunca bloquea la transacción de la base de datos).
+
+### Eventos: rúbrica
+
+- **Nombres centralizados**: colas, exchange y routing key viven en
+  `RabbitPublicacionConfig` (publicador) y `RabbitTopologyConfig` (consumidores),
+  sin strings sueltos.
+- **Beans de topología**: `Queue`/`TopicExchange`/`Binding` con DLX y DLQ
+  (`solicitudes.dlx` → `solicitudes.dlq`) declarados como beans.
+- **ACK/DLQ**: el consumidor hace `ACK` manual; un payload inválido no se
+  reencola en bucle, se enruta a la DLQ.
+- **API de administración**: `admin-rabbit-service` expone crear/consultar/borrar
+  colas (REST), validando el `QueueDTO` con Bean Validation (400 en payload
+  inválido, 201 al crear, 409 si ya existe, 204 al borrar).
 
 ## Credenciales de prueba
 

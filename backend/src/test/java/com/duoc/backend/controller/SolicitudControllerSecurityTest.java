@@ -49,7 +49,7 @@ class SolicitudControllerSecurityTest {
         @Bean
         @Primary
         SolicitudService solicitudServiceStub() {
-            return new SolicitudService(null) {
+            return new SolicitudService(null, null) {
                 @Override
                 public List<Solicitud> obtenerTodas() {
                     return List.of();

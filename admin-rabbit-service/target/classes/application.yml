@@ -1,0 +1,43 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: admin-rabbit-service
+  rabbitmq:
+    host: ${RABBIT_HOST:localhost}
+    port: ${RABBIT_PORT:5672}
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASS:guest}
+
+# ---------------------------------------------------------------------------
+# BLOQUE UNICO DE MENSAJERIA.
+#
+# Todos los nombres del sistema (colas, exchanges, bindings, dlq, reintentos)
+# viven SOLO aqui. backend, admin-rabbit-service y notificaciones-service usan
+# las mismas llaves en sus application.*: no hay un solo valor suelto en el
+# codigo Java. Cambiar un nombre es cambiarlo en cada application.* y reiniciar.
+#
+# Rutas de mensajeria (casos de uso del sistema):
+#   solicitud.creada   -> notificaciones.solicitud-creada  (+ .dlq)
+#   solicitud.evaluada -> notificaciones.solicitud-evaluada (+ .dlq)
+#   solicitud.*        -> auditoria.solicitudes             (+ .dlq)
+# ---------------------------------------------------------------------------
+mensajeria:
+  exchange-solicitudes: solicitudes.topic   # topic exchange de los eventos
+  exchange-muerta: solicitudes.dlx          # dead-letter exchange de todo el sistema
+  reintentos: 3                             # intentos antes de mandar a la DLQ
+
+  solicitudes:
+    creada:
+      routing-key: solicitud.creada
+      cola: notificaciones.solicitud-creada
+      dlq: notificaciones.solicitud-creada.dlq
+    evaluada:
+      routing-key: solicitud.evaluada
+      cola: notificaciones.solicitud-evaluada
+      dlq: notificaciones.solicitud-evaluada.dlq
+    auditoria:
+      routing-key: solicitud.*
+      cola: auditoria.solicitudes
+      dlq: auditoria.solicitudes.dlq

@@ -217,23 +217,31 @@ fi
 # valor real de la ruta) y NO le pega delante el path de la request: con la base
 # sola el backend recibiria "/" y contestaria 404. Por eso aqui se reescribe
 # cada integration_uri a la IP nueva conservando el path que le toca.
-declare -A INTEGRACIONES
-while read -r CLAVE ID; do
-  INTEGRACIONES["$CLAVE"]="$ID"
-done < <(echo "$INTEGRACIONES_JSON" | jq -r 'to_entries[] | "\(.key) \(.value)"')
+#
+# Se lee el id con jq en cada llamada (no con declare -A + process substitution):
+# asi el script funciona igual en Git Bash / macOS (bash 3) que en Linux.
+id_integracion() {  # $1 = clave del mapa integraciones_id
+  echo "$INTEGRACIONES_JSON" | jq -r --arg k "$1" '.[$k] // empty'
+}
 
-reapuntar() {  # $1 = id de la integracion, $2 = path que debe servir
+reapuntar() {  # $1 = clave de la integracion, $2 = path que debe servir
+  local id
+  id="$(id_integracion "$1")"
+  if [ -z "$id" ]; then
+    echo "    AVISO: no hay integracion '${1}' en Terraform; se omite." >&2
+    return 0
+  fi
   aws apigatewayv2 update-integration --region "$REGION" \
     --api-id "$API_ID" \
-    --integration-id "$1" \
+    --integration-id "$id" \
     --integration-uri "http://${IP}:8080${2}" >/dev/null
 }
 
-reapuntar "${INTEGRACIONES[mis_solicitudes]}" "/api/solicitudes/mis-solicitudes"
-reapuntar "${INTEGRACIONES[post]}"            "/api/solicitudes"
-reapuntar "${INTEGRACIONES[delete]}"          "/api/solicitudes/{id}"
-reapuntar "${INTEGRACIONES[todas]}"           "/api/solicitudes/todas"
-reapuntar "${INTEGRACIONES[evaluar]}"         "/api/solicitudes/{id}/evaluar"
+reapuntar mis_solicitudes "/api/solicitudes/mis-solicitudes"
+reapuntar post            "/api/solicitudes"
+reapuntar delete          "/api/solicitudes/{id}"
+reapuntar todas           "/api/solicitudes/todas"
+reapuntar evaluar         "/api/solicitudes/{id}/evaluar"
 
 echo
 echo "OK  ${VERSION} desplegada."

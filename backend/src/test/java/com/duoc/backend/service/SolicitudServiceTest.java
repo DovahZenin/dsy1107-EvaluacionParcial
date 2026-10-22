@@ -1,5 +1,6 @@
 package com.duoc.backend.service;
 
+import com.duoc.backend.eventos.SolicitudEventPublisher;
 import com.duoc.backend.model.Solicitud;
 import com.duoc.backend.repository.SolicitudRepository;
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,9 @@ class SolicitudServiceTest {
 
     @Mock
     private SolicitudRepository repository;
+
+    @Mock
+    private SolicitudEventPublisher publisher;
 
     @InjectMocks
     private SolicitudService service;
@@ -114,5 +118,28 @@ class SolicitudServiceTest {
 
         assertThrows(IllegalArgumentException.class,
                 () -> service.evaluarSolicitud(5L, "XYZ", "ok"));
+    }
+
+    @Test
+    void crearSolicitud_publicaElEventoDeSolicitudCreada() {
+        Solicitud solicitud = new Solicitud();
+        Solicitud guardada = new Solicitud();
+        guardada.setId(7L);
+        when(repository.save(solicitud)).thenReturn(guardada);
+
+        service.crearSolicitud(solicitud, "usuario-1");
+
+        verify(publisher).publicarCreada(guardada);
+    }
+
+    @Test
+    void evaluarSolicitud_publicaElEventoDeSolicitudEvaluada() {
+        Solicitud solicitud = new Solicitud();
+        when(repository.findById(5L)).thenReturn(Optional.of(solicitud));
+        when(repository.save(solicitud)).thenReturn(solicitud);
+
+        service.evaluarSolicitud(5L, "RECHAZADA", "No procede");
+
+        verify(publisher).publicarEvaluada(solicitud);
     }
 }

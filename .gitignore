@@ -2,3 +2,8 @@
 .terraform.lock.hcl
 terraform.tfstate
 terraform.tfstate.backup
+credenciales-lab.env
+terraform/*.tfvars
+terraform/infra-outputs.json
+terraform/tfplan
+terraform/*.bak

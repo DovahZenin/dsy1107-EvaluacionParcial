@@ -1,5 +1,6 @@
 package com.duoc.backend.service;
 
+import com.duoc.backend.eventos.SolicitudEventPublisher;
 import com.duoc.backend.model.Solicitud;
 import com.duoc.backend.repository.SolicitudRepository;
 import org.springframework.stereotype.Service;
@@ -10,9 +11,11 @@ import java.util.Optional;
 @Service
 public class SolicitudService {
     private final SolicitudRepository repository;
+    private final SolicitudEventPublisher publisher;
 
-    public SolicitudService(SolicitudRepository repository) {
+    public SolicitudService(SolicitudRepository repository, SolicitudEventPublisher publisher) {
         this.repository = repository;
+        this.publisher = publisher;
     }
 
     // --- Operaciones del Solicitante ---
@@ -21,7 +24,9 @@ public class SolicitudService {
         solicitud.setUsuarioId(usuarioId);
         // Asignación estricta usando el Enum
         solicitud.setEstado(Solicitud.EstadoSolicitud.PENDIENTE);
-        return repository.save(solicitud);
+        Solicitud guardada = repository.save(solicitud);
+        publisher.publicarCreada(guardada);
+        return guardada;
     }
 
     public List<Solicitud> obtenerPorUsuario(String usuarioId) {
@@ -48,7 +53,9 @@ public class SolicitudService {
             solicitud.setEstado(Solicitud.EstadoSolicitud.valueOf(nuevoEstado.toUpperCase()));
             
             solicitud.setComentarioAprobador(comentario);
-            return repository.save(solicitud);
+            Solicitud evaluada = repository.save(solicitud);
+            publisher.publicarEvaluada(evaluada);
+            return evaluada;
         }
         throw new RuntimeException("Solicitud no encontrada");
     }

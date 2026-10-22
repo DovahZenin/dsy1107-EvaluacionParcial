@@ -41,4 +41,26 @@ class AudienceValidatorTest {
     void rechazaCuandoLaAudienceEstaVacia() {
         assertTrue(validator.validate(jwt(List.of())).hasErrors());
     }
+
+    // Cognito: el access token no trae "aud" sino el claim "client_id".
+    // Se valida contra ese claim cuando no hay "aud".
+    private Jwt accessToken(String clientId) {
+        return Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .subject("usuario-1")
+                .claim("client_id", clientId)
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(300))
+                .build();
+    }
+
+    @Test
+    void validaAccessTokenConClientIdEsperado() {
+        assertFalse(validator.validate(accessToken("client-esperado")).hasErrors());
+    }
+
+    @Test
+    void rechazaAccessTokenConClientIdAjeno() {
+        assertTrue(validator.validate(accessToken("client-ajeno")).hasErrors());
+    }
 }
